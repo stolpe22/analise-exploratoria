@@ -8,7 +8,7 @@ import os
 from datetime import datetime
 
 # Configuração da página
-st.set_page_config(page_title="Análise Exploratória", layout="wide")
+st.set_page_config(page_title="Análise Exploratória")
 
 # Título do App
 st.title("Análise Exploratória de Dados")
@@ -89,10 +89,12 @@ def generate_report(dataframe, table_name):
         # Gerando nome do arquivo com base na tabela, data e hora
         timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
         relative_path = os.path.join(reports_dir, f"{table_name}_relatorio_{timestamp}.html")
+
         absolute_path = os.path.abspath(relative_path)  # Obtendo o caminho absoluto
         
         # Salvando o relatório
         profile.to_file(absolute_path)
+        
         return absolute_path
     except Exception as e:
         raise Exception(f"Erro ao gerar relatório: {e}")
@@ -191,7 +193,7 @@ elif data_source == "PostgreSQL":
             if st.session_state.tables:
                 selected_table = st.selectbox("Selecione uma tabela", st.session_state.tables)
 
-                if st.button("Carregar Dados da Tabela"):
+                if st.button("Analisar Dados da Tabela"):
                     with st.spinner("Carregando a tabela..."):
                         df = load_table_data(st.session_state.engine, selected_schema, selected_table)
                         table_name = selected_table
@@ -209,17 +211,39 @@ if df is not None and table_name is not None:
     # Gerar o relatório apenas se ainda não estiver no estado
     if "report_path" not in st.session_state or st.session_state.report_path is None:
         with st.spinner("Gerando o relatório..."):
-            report_path = generate_report(df, table_name)
+            profile = ProfileReport(df, explorative=True)
+            
+            # Salvar o relatório em HTML
+            report_dir = "reports"
+            if not os.path.exists(report_dir):
+                os.makedirs(report_dir)  # Criar pasta se não existir
+            timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+            report_path = os.path.join(report_dir, f"{table_name}_relatorio_{timestamp}.html")
+            profile.to_file(report_path)
             st.session_state.report_path = report_path  # Armazenar no estado
 
+            # Salvar o relatório em JSON
+            json_dir = "reports/json"
+            if not os.path.exists(json_dir):
+                os.makedirs(json_dir)  # Criar pasta se não existir
+            json_path = os.path.join(json_dir, f"{table_name}_analise_{timestamp}.json")
+            with open(json_path, "w", encoding="utf-8") as json_file:
+                json_file.write(profile.to_json())
+            st.session_state.json_path = json_path  # Armazenar no estado JSON
+    
     # Usar o relatório armazenado no estado
     report_path = st.session_state.report_path
+    json_path = st.session_state.json_path
 
     # Exibindo mensagem de sucesso
     st.success(f"Relatório HTML gerado com sucesso para '{table_name}'!")
+    st.success(f"Análise exportada para JSON em: {json_path}")
 
-    # Exibir um campo de texto somente leitura com o caminho do relatório
-    st.text_input("Caminho do Relatório", value=f"file://{report_path}", disabled=False)
+    # Exibir um campo de texto somente leitura com o caminho do relatório HTML
+    st.text_input("Caminho do Relatório HTML", value=f"file://{report_path}", disabled=False)
+
+    # Exibir um campo de texto somente leitura com o caminho do relatório JSON
+    st.text_input("Caminho do Relatório JSON", value=f"file://{json_path}", disabled=False)
 
     # Exibindo o relatório diretamente na página com largura total
     st.markdown("### Visualização do Relatório")
